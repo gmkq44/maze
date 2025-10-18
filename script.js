@@ -53,33 +53,32 @@ function updateTimer() {
 }
 
 function gameLoop() {
-    if (!isDragging && (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1)) {
-        // Apply inertia
-        const proposedTargetX = targetOffsetX + velocityX;
-        const proposedTargetY = targetOffsetY + velocityY;
+    let dx = 0;
+    let dy = 0;
+
+    if (keysPressed.ArrowUp) dy += moveSpeed;
+    if (keysPressed.ArrowDown) dy -= moveSpeed;
+    if (keysPressed.ArrowLeft) dx += moveSpeed;
+    if (keysPressed.ArrowRight) dx -= moveSpeed;
+
+    if (dx !== 0 || dy !== 0) {
+        const proposedTargetX = targetOffsetX + dx;
+        const proposedTargetY = targetOffsetY + dy;
 
         if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
             targetOffsetX = proposedTargetX;
-        } else {
-            velocityX = 0;
-        }
-
-        if (!checkCollisionAt(targetOffsetX, proposedTargetY)) {
             targetOffsetY = proposedTargetY;
-        } else {
-            velocityY = 0;
+        } else if (!checkCollisionAt(proposedTargetX, targetOffsetY)) {
+            targetOffsetX = proposedTargetX;
+        } else if (!checkCollisionAt(targetOffsetX, proposedTargetY)) {
+            targetOffsetY = proposedTargetY;
         }
-
-        // Apply friction
-        velocityX *= 0.95;
-        velocityY *= 0.95;
-    } else if (!isDragging) {
-        velocityX = 0;
-        velocityY = 0;
     }
 
+    checkWin(); // Check for win condition continuously
+
     // Smoothly move the maze towards the target offset
-    const easing = 0.1;
+    const easing = 0.2; // Increased easing for a snappier feel
     offsetX += (targetOffsetX - offsetX) * easing;
     offsetY += (targetOffsetY - offsetY) * easing;
 
@@ -205,124 +204,16 @@ function getUnvisitedNeighbors(cell, maze, r, c) {
     return neighbors;
 }
 
-let isDragging = false;
-let lastX, lastY;
 let targetOffsetX, targetOffsetY;
 let animationFrameId;
-let velocityX = 0, velocityY = 0;
-let lastMoveTime;
-const flickThreshold = 5; // Minimum speed for a flick
 
-function handleMouseDown(e) {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    velocityX = 0;
-    velocityY = 0;
-    lastMoveTime = Date.now();
-}
-
-function handleMouseMove(e) {
-    if (!isDragging) return;
-    startTimer();
-    let dx = e.clientX - lastX;
-    let dy = e.clientY - lastY;
-
-    const now = Date.now();
-    const deltaTime = now - lastMoveTime;
-
-    if (deltaTime > 0) {
-        velocityX = dx / deltaTime * 10; // Multiply for better feel
-        velocityY = dy / deltaTime * 10;
-    }
-    lastMoveTime = now;
-
-    // Break down the movement into smaller steps to prevent tunneling
-    const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
-    const stepX = dx / steps;
-    const stepY = dy / steps;
-
-    for (let i = 0; i < steps; i++) {
-        const proposedTargetX = targetOffsetX + stepX;
-        const proposedTargetY = targetOffsetY + stepY;
-
-        if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
-            targetOffsetX = proposedTargetX;
-            targetOffsetY = proposedTargetY;
-        } else {
-            // If a collision occurs, stop further movement
-            break;
-        }
-    }
-
-    lastX = e.clientX;
-    lastY = e.clientY;
-}
-
-function handleMouseUp() {
-    isDragging = false;
-    if (Math.abs(velocityX) < flickThreshold && Math.abs(velocityY) < flickThreshold) {
-        velocityX = 0;
-        velocityY = 0;
-    }
-    checkWin();
-}
-
-function handleTouchStart(e) {
-    isDragging = true;
-    lastX = e.touches[0].clientX;
-    lastY = e.touches[0].clientY;
-    velocityX = 0;
-    velocityY = 0;
-    lastMoveTime = Date.now();
-}
-
-function handleTouchMove(e) {
-    if (!isDragging) return;
-    startTimer();
-    e.preventDefault();
-    let dx = e.touches[0].clientX - lastX;
-    let dy = e.touches[0].clientY - lastY;
-
-    const now = Date.now();
-    const deltaTime = now - lastMoveTime;
-
-    if (deltaTime > 0) {
-        velocityX = dx / deltaTime * 10;
-        velocityY = dy / deltaTime * 10;
-    }
-    lastMoveTime = now;
-
-    // Break down the movement into smaller steps to prevent tunneling
-    const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
-    const stepX = dx / steps;
-    const stepY = dy / steps;
-
-    for (let i = 0; i < steps; i++) {
-        const proposedTargetX = targetOffsetX + stepX;
-        const proposedTargetY = targetOffsetY + stepY;
-
-        if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
-            targetOffsetX = proposedTargetX;
-            targetOffsetY = proposedTargetY;
-        } else {
-            // If a collision occurs, stop further movement
-            break;
-        }
-    }
-
-    lastX = e.touches[0].clientX;
-    lastY = e.touches[0].clientY;
-}
-
-function handleTouchEnd() {
-    isDragging = false;
-    if (Math.abs(velocityX) < flickThreshold && Math.abs(velocityY) < flickThreshold) {
-        velocityX = 0;
-        velocityY = 0;
-    }
-    checkWin();
-}
+const keysPressed = {
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
+};
+const moveSpeed = 5; // The speed of maze movement
 
 function checkCollisionAt(proposedOffsetX, proposedOffsetY) {
     const playerRadius = cellSize / 4;
@@ -350,15 +241,55 @@ function checkCollisionAt(proposedOffsetX, proposedOffsetY) {
     return false; // No collision
 }
 
-canvas.addEventListener('mousedown', handleMouseDown);
-canvas.addEventListener('mousemove', handleMouseMove);
-canvas.addEventListener('mouseup', handleMouseUp);
-canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-canvas.addEventListener('touchend', handleTouchEnd);
-
 const resetButton = document.getElementById('resetButton');
 resetButton.addEventListener('click', setup);
+
+// Keyboard controls
+window.addEventListener('keydown', (e) => {
+    if (e.key in keysPressed) {
+        keysPressed[e.key] = true;
+        startTimer();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.key in keysPressed) {
+        keysPressed[e.key] = false;
+    }
+});
+
+// On-screen D-pad controls
+const dpadButtons = document.querySelectorAll('.dpad-btn');
+const keyMap = {
+    up: 'ArrowUp',
+    down: 'ArrowDown',
+    left: 'ArrowLeft',
+    right: 'ArrowRight'
+};
+
+dpadButtons.forEach(button => {
+    const direction = keyMap[button.id];
+    button.addEventListener('mousedown', () => {
+        keysPressed[direction] = true;
+        startTimer();
+    });
+    button.addEventListener('mouseup', () => {
+        keysPressed[direction] = false;
+    });
+    button.addEventListener('mouseleave', () => { // In case the user drags off the button
+        keysPressed[direction] = false;
+    });
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        keysPressed[direction] = true;
+        startTimer();
+    });
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keysPressed[direction] = false;
+    });
+});
+
 
 function checkWin() {
     if (!exit) return;

@@ -29,3 +29,40 @@ canvas {
     border: 2px solid white;
     border-radius: 5px;
 }
+
+#dpad {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    width: 150px;
+    height: 150px;
+    display: grid;
+    grid-template-areas:
+        ". up ."
+        "left . right"
+        ". down .";
+    grid-template-rows: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
+    opacity: 0.7;
+}
+
+.dpad-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #555;
+    color: white;
+    font-size: 24px;
+    border: 2px solid #fff;
+    cursor: pointer;
+    user-select: none;
+}
+
+.dpad-btn:active {
+    background-color: #777;
+}
+
+#up { grid-area: up; }
+#down { grid-area: down; }
+#left { grid-area: left; }
+#right { grid-area: right; }
