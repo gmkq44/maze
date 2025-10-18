@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d');
 
 let maze, rows, cols, cellSize, offsetX, offsetY, exit;
 const mazeSize = 100; // Hell level difficulty
-let startTime, timerInterval;
+let startTime, timerInterval, timerStarted;
 
 const timerElement = document.getElementById('timer');
 
@@ -17,10 +17,10 @@ function setup() {
 
     maze = generateMaze(rows, cols);
 
-    // Player's logical position (center of the maze drawing)
-    // We move the maze, so the player is always at the center of the canvas
-    offsetX = canvas.width / 2 - (cols / 2 * cellSize);
-    offsetY = canvas.height / 2 - (rows / 2 * cellSize);
+    // Player's logical position is always at the canvas center.
+    // We set the initial offset so the maze's starting path (1, 1) is at the center.
+    offsetX = canvas.width / 2 - (1.5 * cellSize);
+    offsetY = canvas.height / 2 - (1.5 * cellSize);
 
     exit = findFarthestExit(maze, 1, 1, rows, cols);
 
@@ -32,14 +32,18 @@ function setup() {
     }
     gameLoop();
 
-    startTimer();
-}
-
-function startTimer() {
-    startTime = Date.now();
+    // Reset timer
     if (timerInterval) {
         clearInterval(timerInterval);
     }
+    timerStarted = false;
+    timerElement.textContent = '0.0s';
+}
+
+function startTimer() {
+    if (timerStarted) return;
+    timerStarted = true;
+    startTime = Date.now();
     timerInterval = setInterval(updateTimer, 100);
 }
 
@@ -183,6 +187,7 @@ function handleMouseDown(e) {
 
 function handleMouseMove(e) {
     if (!isDragging) return;
+    startTimer();
     let dx = e.clientX - lastX;
     let dy = e.clientY - lastY;
 
@@ -221,6 +226,7 @@ function handleTouchStart(e) {
 
 function handleTouchMove(e) {
     if (!isDragging) return;
+    startTimer();
     e.preventDefault();
     let dx = e.touches[0].clientX - lastX;
     let dy = e.touches[0].clientY - lastY;
