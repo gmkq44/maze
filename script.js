@@ -53,8 +53,33 @@ function updateTimer() {
 }
 
 function gameLoop() {
+    if (!isDragging && (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1)) {
+        // Apply inertia
+        const proposedTargetX = targetOffsetX + velocityX;
+        const proposedTargetY = targetOffsetY + velocityY;
+
+        if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
+            targetOffsetX = proposedTargetX;
+        } else {
+            velocityX = 0;
+        }
+
+        if (!checkCollisionAt(targetOffsetX, proposedTargetY)) {
+            targetOffsetY = proposedTargetY;
+        } else {
+            velocityY = 0;
+        }
+
+        // Apply friction
+        velocityX *= 0.95;
+        velocityY *= 0.95;
+    } else if (!isDragging) {
+        velocityX = 0;
+        velocityY = 0;
+    }
+
     // Smoothly move the maze towards the target offset
-    const easing = 0.1; // A lower value provides a smoother, heavier feel
+    const easing = 0.1;
     offsetX += (targetOffsetX - offsetX) * easing;
     offsetY += (targetOffsetY - offsetY) * easing;
 
@@ -184,11 +209,17 @@ let isDragging = false;
 let lastX, lastY;
 let targetOffsetX, targetOffsetY;
 let animationFrameId;
+let velocityX = 0, velocityY = 0;
+let lastMoveTime;
+const flickThreshold = 5; // Minimum speed for a flick
 
 function handleMouseDown(e) {
     isDragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
+    velocityX = 0;
+    velocityY = 0;
+    lastMoveTime = Date.now();
 }
 
 function handleMouseMove(e) {
@@ -196,6 +227,15 @@ function handleMouseMove(e) {
     startTimer();
     let dx = e.clientX - lastX;
     let dy = e.clientY - lastY;
+
+    const now = Date.now();
+    const deltaTime = now - lastMoveTime;
+
+    if (deltaTime > 0) {
+        velocityX = dx / deltaTime * 10; // Multiply for better feel
+        velocityY = dy / deltaTime * 10;
+    }
+    lastMoveTime = now;
 
     // Break down the movement into smaller steps to prevent tunneling
     const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
@@ -221,6 +261,10 @@ function handleMouseMove(e) {
 
 function handleMouseUp() {
     isDragging = false;
+    if (Math.abs(velocityX) < flickThreshold && Math.abs(velocityY) < flickThreshold) {
+        velocityX = 0;
+        velocityY = 0;
+    }
     checkWin();
 }
 
@@ -228,6 +272,9 @@ function handleTouchStart(e) {
     isDragging = true;
     lastX = e.touches[0].clientX;
     lastY = e.touches[0].clientY;
+    velocityX = 0;
+    velocityY = 0;
+    lastMoveTime = Date.now();
 }
 
 function handleTouchMove(e) {
@@ -236,6 +283,15 @@ function handleTouchMove(e) {
     e.preventDefault();
     let dx = e.touches[0].clientX - lastX;
     let dy = e.touches[0].clientY - lastY;
+
+    const now = Date.now();
+    const deltaTime = now - lastMoveTime;
+
+    if (deltaTime > 0) {
+        velocityX = dx / deltaTime * 10;
+        velocityY = dy / deltaTime * 10;
+    }
+    lastMoveTime = now;
 
     // Break down the movement into smaller steps to prevent tunneling
     const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
@@ -261,6 +317,10 @@ function handleTouchMove(e) {
 
 function handleTouchEnd() {
     isDragging = false;
+    if (Math.abs(velocityX) < flickThreshold && Math.abs(velocityY) < flickThreshold) {
+        velocityX = 0;
+        velocityY = 0;
+    }
     checkWin();
 }
 
