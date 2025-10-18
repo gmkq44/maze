@@ -1,8 +1,11 @@
 const canvas = document.getElementById('mazeCanvas');
 const ctx = canvas.getContext('2d');
 
-let maze, rows, cols, cellSize, offsetX, offsetY;
+let maze, rows, cols, cellSize, offsetX, offsetY, exit;
 const mazeSize = 100; // Hell level difficulty
+let startTime, timerInterval;
+
+const timerElement = document.getElementById('timer');
 
 function setup() {
     canvas.width = window.innerWidth;
@@ -19,7 +22,77 @@ function setup() {
     offsetX = canvas.width / 2 - (cols / 2 * cellSize);
     offsetY = canvas.height / 2 - (rows / 2 * cellSize);
 
+    exit = findFarthestExit(maze, 1, 1, rows, cols);
+
+    targetOffsetX = offsetX;
+    targetOffsetY = offsetY;
+
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    gameLoop();
+
+    startTimer();
+}
+
+function startTimer() {
+    startTime = Date.now();
+    if (timerInterval) {
+        clearInterval(timerInterval);
+    }
+    timerInterval = setInterval(updateTimer, 100);
+}
+
+function updateTimer() {
+    const elapsedTime = (Date.now() - startTime) / 1000;
+    timerElement.textContent = `${elapsedTime.toFixed(1)}s`;
+}
+
+function gameLoop() {
+    // Smoothly move the maze towards the target offset
+    const easing = 0.2; // A higher value gives a more responsive feel
+    offsetX += (targetOffsetX - offsetX) * easing;
+    offsetY += (targetOffsetY - offsetY) * easing;
+
     draw();
+
+    animationFrameId = requestAnimationFrame(gameLoop);
+}
+
+function findFarthestExit(maze, startX, startY, rows, cols) {
+    let queue = [[{ x: startX, y: startY }, 0]];
+    let visited = new Set([`${startX},${startY}`]);
+    let farthestCell = { x: startX, y: startY };
+    let maxDist = 0;
+
+    const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+    while (queue.length > 0) {
+        let [{ x, y }, dist] = queue.shift();
+
+        if (dist > maxDist) {
+            maxDist = dist;
+            farthestCell = { x, y };
+        }
+
+        for (const [dx, dy] of directions) {
+            const newX = x + dx;
+            const newY = y + dy;
+            const key = `${newX},${newY}`;
+
+            if (
+                newX >= 0 && newX < cols &&
+                newY >= 0 && newY < rows &&
+                maze[newY][newX] === 0 &&
+                !visited.has(key)
+            ) {
+                visited.add(key);
+                queue.push([{ x: newX, y: newY }, dist + 1]);
+            }
+        }
+    }
+
+    return farthestCell;
 }
 
 function draw() {
@@ -36,8 +109,10 @@ function draw() {
     }
 
     // Draw the exit
-    ctx.fillStyle = 'gold';
-    ctx.fillRect(offsetX + (cols - 1) * cellSize, offsetY + (rows - 2) * cellSize, cellSize, cellSize);
+    if (exit) {
+        ctx.fillStyle = 'gold';
+        ctx.fillRect(offsetX + exit.x * cellSize, offsetY + exit.y * cellSize, cellSize, cellSize);
+    }
 
     // Draw the player in the center of the canvas
     const playerX = canvas.width / 2;
@@ -72,9 +147,6 @@ function generateMaze(rows, cols) {
         }
     }
 
-    // Set the exit
-    maze[rows - 2][cols - 1] = 0;
-
     return maze;
 }
 
@@ -100,6 +172,8 @@ function getUnvisitedNeighbors(cell, maze, r, c) {
 
 let isDragging = false;
 let lastX, lastY;
+let targetOffsetX, targetOffsetY;
+let animationFrameId;
 
 function handleMouseDown(e) {
     isDragging = true;
@@ -112,11 +186,22 @@ function handleMouseMove(e) {
     let dx = e.clientX - lastX;
     let dy = e.clientY - lastY;
 
-    // Check for collisions before moving
-    if (!checkCollision(dx, dy)) {
-        offsetX += dx;
-        offsetY += dy;
-        draw();
+    // Break down the movement into smaller steps to prevent tunneling
+    const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
+    const stepX = dx / steps;
+    const stepY = dy / steps;
+
+    for (let i = 0; i < steps; i++) {
+        const proposedTargetX = targetOffsetX + stepX;
+        const proposedTargetY = targetOffsetY + stepY;
+
+        if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
+            targetOffsetX = proposedTargetX;
+            targetOffsetY = proposedTargetY;
+        } else {
+            // If a collision occurs, stop further movement
+            break;
+        }
     }
 
     lastX = e.clientX;
@@ -140,10 +225,22 @@ function handleTouchMove(e) {
     let dx = e.touches[0].clientX - lastX;
     let dy = e.touches[0].clientY - lastY;
 
-    if (!checkCollision(dx, dy)) {
-        offsetX += dx;
-        offsetY += dy;
-        draw();
+    // Break down the movement into smaller steps to prevent tunneling
+    const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (cellSize / 4));
+    const stepX = dx / steps;
+    const stepY = dy / steps;
+
+    for (let i = 0; i < steps; i++) {
+        const proposedTargetX = targetOffsetX + stepX;
+        const proposedTargetY = targetOffsetY + stepY;
+
+        if (!checkCollisionAt(proposedTargetX, proposedTargetY)) {
+            targetOffsetX = proposedTargetX;
+            targetOffsetY = proposedTargetY;
+        } else {
+            // If a collision occurs, stop further movement
+            break;
+        }
     }
 
     lastX = e.touches[0].clientX;
@@ -155,34 +252,29 @@ function handleTouchEnd() {
     checkWin();
 }
 
-function checkCollision(dx, dy) {
-    const playerRadius = cellSize / 4; // A smaller radius for easier movement
-    const playerX = canvas.width / 2 - offsetX;
-    const playerY = canvas.height / 2 - offsetY;
+function checkCollisionAt(proposedOffsetX, proposedOffsetY) {
+    const playerRadius = cellSize / 4;
+    const playerX = canvas.width / 2 - proposedOffsetX;
+    const playerY = canvas.height / 2 - proposedOffsetY;
 
-    const newPlayerX = playerX - dx;
-    const newPlayerY = playerY - dy;
-
-    const gridX = Math.floor(newPlayerX / cellSize);
-    const gridY = Math.floor(newPlayerY / cellSize);
+    const gridX = Math.floor(playerX / cellSize);
+    const gridY = Math.floor(playerY / cellSize);
 
     for (let y = gridY - 1; y <= gridY + 1; y++) {
         for (let x = gridX - 1; x <= gridX + 1; x++) {
             if (x >= 0 && x < cols && y >= 0 && y < rows && maze[y][x] === 1) {
-                // Check for collision with the wall
                 const wallX = x * cellSize + cellSize / 2;
                 const wallY = y * cellSize + cellSize / 2;
 
-                const distX = Math.abs(newPlayerX - wallX) - cellSize / 2;
-                const distY = Math.abs(newPlayerY - wallY) - cellSize / 2;
+                const distX = Math.abs(playerX - wallX) - cellSize / 2;
+                const distY = Math.abs(playerY - wallY) - cellSize / 2;
 
                 if (distX < playerRadius && distY < playerRadius) {
-                    return true; // Collision detected
+                    return true; // Collision
                 }
             }
         }
     }
-
     return false; // No collision
 }
 
@@ -197,21 +289,25 @@ const resetButton = document.getElementById('resetButton');
 resetButton.addEventListener('click', setup);
 
 function checkWin() {
+    if (!exit) return;
+
     const playerX = canvas.width / 2 - offsetX;
     const playerY = canvas.height / 2 - offsetY;
 
-    const exitX = (cols - 1) * cellSize;
-    const exitY = (rows - 2) * cellSize;
+    const exitPixelX = exit.x * cellSize;
+    const exitPixelY = exit.y * cellSize;
 
     if (
-        playerX > exitX &&
-        playerX < exitX + cellSize &&
-        playerY > exitY &&
-        playerY < exitY + cellSize
+        playerX > exitPixelX &&
+        playerX < exitPixelX + cellSize &&
+        playerY > exitPixelY &&
+        playerY < exitPixelY + cellSize
     ) {
+        clearInterval(timerInterval);
         // A short delay to allow the player to see they've reached the exit
         setTimeout(() => {
-            alert('You escaped the hell maze!');
+            const finalTime = (Date.now() - startTime) / 1000;
+            alert(`You escaped the hell maze in ${finalTime.toFixed(1)} seconds!`);
             setup();
         }, 100);
     }
