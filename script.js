@@ -54,7 +54,7 @@ function updateTimer() {
 
 function gameLoop() {
     // Smoothly move the maze towards the target offset
-    const easing = 0.2; // A higher value gives a more responsive feel
+    const easing = 0.1; // A lower value provides a smoother, heavier feel
     offsetX += (targetOffsetX - offsetX) * easing;
     offsetY += (targetOffsetY - offsetY) * easing;
 
@@ -102,9 +102,15 @@ function findFarthestExit(maze, startX, startY, rows, cols) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw the maze
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
+    // Calculate the visible portion of the maze to avoid drawing off-screen cells
+    const startCol = Math.max(0, Math.floor(-offsetX / cellSize));
+    const endCol = Math.min(cols, Math.ceil((canvas.width - offsetX) / cellSize));
+    const startRow = Math.max(0, Math.floor(-offsetY / cellSize));
+    const endRow = Math.min(rows, Math.ceil((canvas.height - offsetY) / cellSize));
+
+    // Draw only the visible maze cells
+    for (let y = startRow; y < endRow; y++) {
+        for (let x = startCol; x < endCol; x++) {
             if (maze[y][x] === 1) {
                 ctx.fillStyle = '#333'; // Wall color
                 ctx.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
@@ -112,8 +118,8 @@ function draw() {
         }
     }
 
-    // Draw the exit
-    if (exit) {
+    // Draw the exit (only if it's within the visible area)
+    if (exit && exit.x >= startCol && exit.x < endCol && exit.y >= startRow && exit.y < endRow) {
         ctx.fillStyle = 'gold';
         ctx.fillRect(offsetX + exit.x * cellSize, offsetY + exit.y * cellSize, cellSize, cellSize);
     }
